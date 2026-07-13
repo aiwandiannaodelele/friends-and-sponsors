@@ -14,6 +14,7 @@ const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'dist');
 const DATA_FRIENDS = path.join(ROOT, 'data', 'friends');
 const DATA_SPONSORS = path.join(ROOT, 'data', 'sponsors');
+const IMG_SPONSORS = path.join(ROOT, 'data', 'sponsors-img');
 
 function isNonEmptyString(v) { return typeof v === 'string' && v.trim().length > 0; }
 function isNullOrString(v)   { return v === null || typeof v === 'string'; }
@@ -60,12 +61,22 @@ fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, 'friends.json'), JSON.stringify(friends, null, 2));
 fs.writeFileSync(path.join(OUT, 'sponsors.json'), JSON.stringify(sponsors, null, 2));
 
-// Copy Cloudflare Pages headers/config
+// Copy Cloudflare Workers headers/config
 for (const file of ['_headers']) {
   const src = path.join(ROOT, 'src', file);
   if (fs.existsSync(src)) {
     fs.copyFileSync(src, path.join(OUT, file));
   }
+}
+
+// Copy sponsor images
+const OUT_SPONSORS_IMG = path.join(OUT, 'sponsors', 'img');
+if (fs.existsSync(IMG_SPONSORS)) {
+  fs.mkdirSync(OUT_SPONSORS_IMG, { recursive: true });
+  for (const f of fs.readdirSync(IMG_SPONSORS)) {
+    fs.copyFileSync(path.join(IMG_SPONSORS, f), path.join(OUT_SPONSORS_IMG, f));
+  }
+  console.log(`   🖼️  ${fs.readdirSync(IMG_SPONSORS).length} sponsor images copied`);
 }
 
 console.log(`\n✅ dist/friends.json (${friends.length})`);
