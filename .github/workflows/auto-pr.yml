@@ -288,6 +288,40 @@ jobs:
               }
             }
 
+            async function setLabels({ addLabels, removeLabels, skipIfSame }) {
+              const addSet = new Set(addLabels || [])
+              const removeSet = new Set(removeLabels || [])
+              for (const x of addSet) removeSet.delete(x)
+
+              const current = await github.rest.issues.get({ owner, repo, issue_number: pull_number })
+              const currentLabels = new Set((current.data.labels || []).map((l) => l.name))
+
+              if (skipIfSame) {
+                for (const name of addSet) {
+                  if (currentLabels.has(name)) {
+                    core.info(`Label ${name} already set, skip label operations`)
+                    return
+                  }
+                }
+              }
+
+              const finalRemove = Array.from(removeSet).filter((name) => currentLabels.has(name))
+              if (finalRemove.length) {
+                for (const name of finalRemove) {
+                  try {
+                    await github.rest.issues.removeLabel({ owner, repo, issue_number: pull_number, name })
+                  } catch (e) {
+                    if (e.status !== 404) throw e
+                  }
+                }
+              }
+
+              const finalAdd = Array.from(addSet).filter((name) => !currentLabels.has(name))
+              if (finalAdd.length) {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: pull_number, labels: finalAdd })
+              }
+            }
+
             function verifyBacklink(html, expected) {
               if (!html || !expected) return { found: false, links: [], reason: 'empty input' }
               const target = expected.replace(/\/$/, '')
@@ -779,6 +813,40 @@ jobs:
                 return JSON.parse(result.trim())
               } catch (e) {
                 return { ok: false, error: e?.message || String(e) }
+              }
+            }
+
+            async function setLabels({ addLabels, removeLabels, skipIfSame }) {
+              const addSet = new Set(addLabels || [])
+              const removeSet = new Set(removeLabels || [])
+              for (const x of addSet) removeSet.delete(x)
+
+              const current = await github.rest.issues.get({ owner, repo, issue_number: pull_number })
+              const currentLabels = new Set((current.data.labels || []).map((l) => l.name))
+
+              if (skipIfSame) {
+                for (const name of addSet) {
+                  if (currentLabels.has(name)) {
+                    core.info(`Label ${name} already set, skip label operations`)
+                    return
+                  }
+                }
+              }
+
+              const finalRemove = Array.from(removeSet).filter((name) => currentLabels.has(name))
+              if (finalRemove.length) {
+                for (const name of finalRemove) {
+                  try {
+                    await github.rest.issues.removeLabel({ owner, repo, issue_number: pull_number, name })
+                  } catch (e) {
+                    if (e.status !== 404) throw e
+                  }
+                }
+              }
+
+              const finalAdd = Array.from(addSet).filter((name) => !currentLabels.has(name))
+              if (finalAdd.length) {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: pull_number, labels: finalAdd })
               }
             }
 
