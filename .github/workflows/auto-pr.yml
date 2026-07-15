@@ -282,7 +282,7 @@ jobs:
                       });
                       const page = await context.newPage();
                       const response = await page.goto(targetUrl, {
-                        waitUntil: 'networkidle',
+                        waitUntil: 'load',
                         timeout: 30000
                       });
                       const body = await page.content();
@@ -869,7 +869,7 @@ jobs:
                       });
                       const page = await context.newPage();
                       const response = await page.goto(targetUrl, {
-                        waitUntil: 'networkidle',
+                        waitUntil: 'load',
                         timeout: 30000
                       });
                       const body = await page.content();
