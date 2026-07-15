@@ -212,7 +212,8 @@ jobs:
 
             async function createComment(body) {
               const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-              const footer = `\n\n---\n该评论由 Action 自动化发送，无需回复。\n\n🔗 [查看 Action](${runUrl})`
+              const retryHint = '💡 如果因网络波动等原因多次不通过，可尝试 **关闭后重新打开 PR** 以再次触发检查。仍然不行请联系 [afoim](https://github.com/afoim)（在[仓库首页](https://github.com/afoim/friends-and-sponsors)点击 About 可以找到联系方式）。'
+              const footer = `\n\n---\n该评论由 Action 自动化发送，无需回复。\n\n🔗 [查看 Action](${runUrl})\n\n${retryHint}`
               const fullBody = body + footer
               try {
                 const { execSync } = require('child_process')
@@ -769,7 +770,8 @@ jobs:
 
             async function createComment(body) {
               const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-              const footer = `\n\n---\n该评论由 Action 自动化发送，无需回复。\n\n🔗 [查看 Action](${runUrl})`
+              const retryHint = '💡 如果因网络波动等原因多次不通过，可尝试 **关闭后重新打开 PR** 以再次触发检查。仍然不行请联系 [afoim](https://github.com/afoim)（在[仓库首页](https://github.com/afoim/friends-and-sponsors)点击 About 可以找到联系方式）。'
+              const footer = `\n\n---\n该评论由 Action 自动化发送，无需回复。\n\n🔗 [查看 Action](${runUrl})\n\n${retryHint}`
               const fullBody = body + footer
               try {
                 const { execSync } = require('child_process')
