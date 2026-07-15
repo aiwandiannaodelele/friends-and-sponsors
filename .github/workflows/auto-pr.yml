@@ -120,28 +120,30 @@ jobs:
             }
 
             async function ensureLabel(name) {
+              const { execSync } = require('child_process')
               try {
-                await github.rest.issues.getLabel({ owner, repo, name })
+                execSync(`gh api /repos/${owner}/${repo}/labels/${encodeURIComponent(name)} --method GET --silent`, {
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
               } catch (e) {
-                if (e.status !== 404) throw e
-                await github.rest.issues.createLabel({
-                  owner,
-                  repo,
-                  name,
-                  color: 'ededed',
+                const errMsg = e?.stderr?.toString() || e?.message || String(e)
+                if (!errMsg.includes('404')) throw e
+                execSync(`gh api /repos/${owner}/${repo}/labels --method POST --input -`, {
+                  input: JSON.stringify({ name, color: 'ededed' }),
+                  encoding: 'utf8',
+                  timeout: 15000
                 })
               }
             }
 
             async function listAllFiles() {
-              const files = []
-              for await (const res of github.paginate.iterator(
-                github.rest.pulls.listFiles,
-                { owner, repo, pull_number, per_page: 100 }
-              )) {
-                for (const f of res.data) files.push(f)
-              }
-              return files
+              const { execSync } = require('child_process')
+              const result = execSync(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/files --paginate --jq '.[]'`, {
+                encoding: 'utf8',
+                timeout: 30000
+              })
+              return result.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
             }
 
             const files = await listAllFiles()
@@ -184,12 +186,22 @@ jobs:
             if (touchedFriends && !touchedSponsors) remove.push(LABEL_SPONSOR)
             if (touchedSponsors && !touchedFriends) remove.push(LABEL_FRIEND)
 
+            const { execSync } = require('child_process')
+            const ghAddLabels = (labels) => execSync(`gh api /repos/${owner}/${repo}/issues/${pull_number}/labels --method POST --input -`, {
+              input: JSON.stringify({ labels }),
+              encoding: 'utf8',
+              timeout: 15000
+            })
             if (add.length) {
-              await github.rest.issues.addLabels({ owner, repo, issue_number: pull_number, labels: add })
+              ghAddLabels(add)
             }
             for (const name of remove) {
               try {
-                await github.rest.issues.removeLabel({ owner, repo, issue_number: pull_number, name })
+              const { execSync: _e } = require('child_process')
+                _e(`gh api /repos/${owner}/${repo}/issues/${pull_number}/labels/${encodeURIComponent(name)} --method DELETE --silent`, {
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
               } catch (e) {
                 if (e.status !== 404) throw e
               }
@@ -200,10 +212,15 @@ jobs:
               const footer = `\n\n---\n该评论由 Action 自动化发送，无需回复。\n\n🔗 [查看 Action](${runUrl})`
               const fullBody = body + footer
               try {
-                await github.rest.issues.createComment({ owner, repo, issue_number: pull_number, body: fullBody })
+                const { execSync } = require('child_process')
+                const encoded = JSON.stringify(fullBody)
+                execSync(`gh api /repos/${owner}/${repo}/issues/${pull_number}/comments --method POST --input -`, {
+                  input: JSON.stringify({ body: fullBody }),
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
               } catch (e) {
                 core.error(`createComment failed: ${e?.message || e}`)
-                throw e
               }
             }
 
@@ -220,10 +237,13 @@ jobs:
             }
 
             async function getTextFileFromRepo(path, ref) {
-              const res = await github.rest.repos.getContent({ owner, repo, path, ref })
-              if (Array.isArray(res.data) || !res.data?.content) throw new Error(`Invalid content response for ${path}`)
-              const raw = Buffer.from(res.data.content, res.data.encoding || 'base64').toString('utf8')
-              return raw
+              const { execSync } = require('child_process')
+              const result = execSync(`gh api /repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(ref)} --jq .content`, {
+                encoding: 'utf8',
+                timeout: 15000
+              }).trim()
+              if (!result) throw new Error(`Invalid content response for ${path}`)
+              return Buffer.from(result, 'base64').toString('utf8')
             }
 
             async function getSiteBase() {
@@ -306,18 +326,28 @@ jobs:
 
               const finalRemove = Array.from(removeSet).filter((name) => currentLabels.has(name))
               if (finalRemove.length) {
+                const { execSync } = require('child_process')
                 for (const name of finalRemove) {
                   try {
-                    await github.rest.issues.removeLabel({ owner, repo, issue_number: pull_number, name })
+                    execSync(`gh api /repos/${owner}/${repo}/issues/${pull_number}/labels/${encodeURIComponent(name)} --method DELETE --silent`, {
+                      encoding: 'utf8',
+                      timeout: 15000
+                    })
                   } catch (e) {
-                    if (e.status !== 404) throw e
+                    const errMsg = e?.stderr?.toString() || e?.message || String(e)
+                    if (!errMsg.includes('404')) throw e
                   }
                 }
               }
 
               const finalAdd = Array.from(addSet).filter((name) => !currentLabels.has(name))
               if (finalAdd.length) {
-                await github.rest.issues.addLabels({ owner, repo, issue_number: pull_number, labels: finalAdd })
+                const { execSync } = require('child_process')
+                execSync(`gh api /repos/${owner}/${repo}/issues/${pull_number}/labels --method POST --input -`, {
+                  input: JSON.stringify({ labels: finalAdd }),
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
               }
             }
 
@@ -410,7 +440,12 @@ jobs:
                     }
 
                     if (isDelete) {
-                      await github.rest.pulls.merge({ owner, repo, pull_number, merge_method: 'squash' })
+      const { execSync: _em } = require('child_process')
+                _em(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
+                  input: JSON.stringify({ merge_method: 'squash' }),
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
                       return
                     }
                   }
@@ -485,11 +520,11 @@ jobs:
             const primaryKind = touchedSponsors ? 'sponsor' : 'friend'
             const primary = parsedEntries.find((e) => e.kind === primaryKind) || parsedEntries[0]
 
-            await github.rest.pulls.update({
-              owner,
-              repo,
-              pull_number,
-              title: `${primary.kind === 'friend' ? '友链' : '赞助'}：${primary.data.name}`,
+            const { execSync: _up } = require('child_process')
+            _up(`gh api /repos/${owner}/${repo}/pulls/${pull_number} --method PATCH --input -`, {
+              input: JSON.stringify({ title: `${primary.kind === 'friend' ? '友链' : '赞助'}：${primary.data.name}` }),
+              encoding: 'utf8',
+              timeout: 15000
             })
 
             const avatarUrl = normalizeUrl(primary.data.avatar)
@@ -525,7 +560,12 @@ jobs:
             // Auto merge if it is an edit (modified) and all checks pass
             if (relevant.length === 1 && relevant[0].status === 'modified' && allOk) {
                try {
-                  await github.rest.pulls.merge({ owner, repo, pull_number, merge_method: 'squash' })
+  const { execSync: _em } = require('child_process')
+                _em(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
+                  input: JSON.stringify({ merge_method: 'squash' }),
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
                   return
                 } catch {}
             }
@@ -537,7 +577,7 @@ jobs:
                 return
               }
               if (!existingLabelNames.has(LABEL_BIDIR) && !existingLabelNames.has(LABEL_BIDIR_OK)) {
-                await github.rest.issues.addLabels({ owner, repo, issue_number: pull_number, labels: [LABEL_BIDIR] })
+                ghAddLabels([LABEL_BIDIR])
               }
 
               const expected = siteBase.replace(/\/$/, '')
@@ -642,7 +682,12 @@ jobs:
                 await setLabels({ addLabels: [LABEL_BIDIR_OK], removeLabels: [LABEL_BIDIR] })
 
                 try {
-                  await github.rest.pulls.merge({ owner, repo, pull_number, merge_method: 'squash' })
+  const { execSync: _em } = require('child_process')
+                _em(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
+                  input: JSON.stringify({ merge_method: 'squash' }),
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
                 } catch (e) {
                   await createComment(`${MSG.MERGE_FAIL}${e?.message || e}`)
                   return
@@ -725,7 +770,16 @@ jobs:
               const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
               const footer = `\n\n---\n该评论由 Action 自动化发送，无需回复。\n\n🔗 [查看 Action](${runUrl})`
               const fullBody = body + footer
-              await github.rest.issues.createComment({ owner, repo, issue_number: pull_number, body: fullBody })
+              try {
+                const { execSync } = require('child_process')
+                execSync(`gh api /repos/${owner}/${repo}/issues/${pull_number}/comments --method POST --input -`, {
+                  input: JSON.stringify({ body: fullBody }),
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
+              } catch (e) {
+                core.error(`createComment failed: ${e?.message || e}`)
+              }
             }
 
             function parseJsonSafe(text) {
@@ -737,10 +791,13 @@ jobs:
             }
 
             async function getTextFileFromRepo(path, ref) {
-              const res = await github.rest.repos.getContent({ owner, repo, path, ref })
-              if (Array.isArray(res.data) || !res.data?.content) throw new Error(`Invalid content response for ${path}`)
-              const raw = Buffer.from(res.data.content, res.data.encoding || 'base64').toString('utf8')
-              return raw
+              const { execSync } = require('child_process')
+              const result = execSync(`gh api /repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(ref)} --jq .content`, {
+                encoding: 'utf8',
+                timeout: 15000
+              }).trim()
+              if (!result) throw new Error(`Invalid content response for ${path}`)
+              return Buffer.from(result, 'base64').toString('utf8')
             }
 
             async function getSiteBase(defaultBranch) {
@@ -833,23 +890,37 @@ jobs:
 
               const finalRemove = Array.from(removeSet).filter((name) => currentLabels.has(name))
               if (finalRemove.length) {
+                const { execSync } = require('child_process')
                 for (const name of finalRemove) {
                   try {
-                    await github.rest.issues.removeLabel({ owner, repo, issue_number: pull_number, name })
+                    execSync(`gh api /repos/${owner}/${repo}/issues/${pull_number}/labels/${encodeURIComponent(name)} --method DELETE --silent`, {
+                      encoding: 'utf8',
+                      timeout: 15000
+                    })
                   } catch (e) {
-                    if (e.status !== 404) throw e
+                    const errMsg = e?.stderr?.toString() || e?.message || String(e)
+                    if (!errMsg.includes('404')) throw e
                   }
                 }
               }
 
               const finalAdd = Array.from(addSet).filter((name) => !currentLabels.has(name))
               if (finalAdd.length) {
-                await github.rest.issues.addLabels({ owner, repo, issue_number: pull_number, labels: finalAdd })
+                const { execSync } = require('child_process')
+                execSync(`gh api /repos/${owner}/${repo}/issues/${pull_number}/labels --method POST --input -`, {
+                  input: JSON.stringify({ labels: finalAdd }),
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
               }
             }
 
-            const pr = await github.rest.pulls.get({ owner, repo, pull_number })
-            const prLabels = new Set((pr.data.labels || []).map((l) => l.name))
+            const { execSync: _g } = require('child_process')
+            const pr = JSON.parse(_g(`gh api /repos/${owner}/${repo}/pulls/${pull_number} --jq '{labels: [.labels[].name]}'`, {
+              encoding: 'utf8',
+              timeout: 15000
+            }))
+            const prLabels = new Set((pr.labels || []))
             if (!prLabels.has(LABEL_FRIEND) && !prLabels.has(LABEL_SPONSOR)) {
               return
             }
@@ -858,15 +929,13 @@ jobs:
               return
             }
 
-            const files = await (async () => {
-              const all = []
-              for await (const res of github.paginate.iterator(
-                github.rest.pulls.listFiles,
-                { owner, repo, pull_number, per_page: 100 }
-              )) {
-                for (const f of res.data) all.push(f)
-              }
-              return all
+            const { execSync: _ls } = require('child_process')
+            const files = (() => {
+              const out = _ls(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/files --paginate --jq '.[]'`, {
+                encoding: 'utf8',
+                timeout: 30000
+              })
+              return out.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
             })()
 
             if (files.length !== 1) {
@@ -929,7 +998,12 @@ jobs:
                     }
 
                     if (isDelete) {
-                      await github.rest.pulls.merge({ owner, repo, pull_number, merge_method: 'squash' })
+      const { execSync: _em } = require('child_process')
+                _em(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
+                  input: JSON.stringify({ merge_method: 'squash' }),
+                  encoding: 'utf8',
+                  timeout: 15000
+                })
                       return
                     }
                   }
@@ -1002,11 +1076,11 @@ jobs:
             const primaryKind = prLabels.has(LABEL_SPONSOR) ? 'sponsor' : 'friend'
             const primary = parsedEntries.find((e) => e.kind === primaryKind) || parsedEntries[0]
 
-            await github.rest.pulls.update({
-              owner,
-              repo,
-              pull_number,
-              title: `${primary.kind === 'friend' ? '友链' : '赞助'}：${primary.data.name}`,
+            const { execSync: _up } = require('child_process')
+            _up(`gh api /repos/${owner}/${repo}/pulls/${pull_number} --method PATCH --input -`, {
+              input: JSON.stringify({ title: `${primary.kind === 'friend' ? '友链' : '赞助'}：${primary.data.name}` }),
+              encoding: 'utf8',
+              timeout: 15000
             })
             const siteBase = await getSiteBase(pr.data.base.repo.default_branch)
 
@@ -1047,7 +1121,12 @@ jobs:
             }
 
             try {
-              await github.rest.pulls.merge({ owner, repo, pull_number, merge_method: 'squash' })
+              const { execSync: _em2 } = require('child_process')
+              _em2(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
+                input: JSON.stringify({ merge_method: 'squash' }),
+                encoding: 'utf8',
+                timeout: 15000
+              })
             } catch (e) {
               await createComment(MSG.MERGE_FAIL + '\n\n' + `错误信息：${e?.message || e}`)
             }
