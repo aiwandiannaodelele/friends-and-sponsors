@@ -801,6 +801,31 @@ jobs:
               return Buffer.from(result, 'base64').toString('utf8')
             }
 
+            function verifyBacklink(html, expected) {
+              if (!html || !expected) return { found: false, links: [], reason: 'empty input' }
+              const target = expected.replace(/\/$/, '')
+              const patterns = [
+                /href\s*=\s*["']([^"']+)["']/gi,
+                /href\s*=\s*([^\s>]+)/gi,
+              ]
+              const foundLinks = []
+              const allMatches = []
+              for (const re of patterns) {
+                let m
+                while ((m = re.exec(html)) !== null) {
+                  const href = (m[1] || '').trim()
+                  allMatches.push(href)
+                  if (!href.startsWith('http')) continue
+                  foundLinks.push(href)
+                  const normalized = href.replace(/\/$/, '')
+                  if (normalized === target) {
+                    return { found: true, links: foundLinks, matchedHref: href }
+                  }
+                }
+              }
+              return { found: false, links: foundLinks, allMatches: allMatches.slice(0, 20), target }
+            }
+
             async function getSiteBase(defaultBranch) {
               try {
                 const raw = await getTextFileFromRepo('config/site.json', defaultBranch)
@@ -917,15 +942,25 @@ jobs:
             }
 
             const { execSync: _g } = require('child_process')
-            const pr = JSON.parse(_g(`gh api /repos/${owner}/${repo}/pulls/${pull_number} --jq '{labels: [.labels[].name]}'`, {
+            const prRaw = JSON.parse(_g(`gh api /repos/${owner}/${repo}/pulls/${pull_number}`, {
               encoding: 'utf8',
               timeout: 15000
             }))
-            const prLabels = new Set((pr.labels || []))
+            const pr = {
+              labels: (prRaw.labels || []).map((l) => l.name),
+              data: {
+                head: { sha: prRaw.head.sha },
+                base: {
+                  sha: prRaw.base.sha,
+                  repo: { default_branch: prRaw.base.repo.default_branch }
+                }
+              }
+            }
+            const prLabels = new Set(pr.labels)
             if (!prLabels.has(LABEL_FRIEND) && !prLabels.has(LABEL_SPONSOR)) {
               return
             }
-            if (prLabels.has(LABEL_BIDIR) || prLabels.has(LABEL_BIDIR_OK)) {
+            if (prLabels.has(LABEL_BIDIR_OK)) {
               await createComment(MSG.BIDIR_INSTRUCTIONS)
               return
             }
@@ -1112,12 +1147,31 @@ jobs:
             const allOk = avatarCheck.ok && (!siteCheck || siteCheck.ok)
             if (allOk && siteCheck) addReach.push(LABEL_ALL_OK)
 
-            // 注意：这里省略了 setLabels 的调用，因为它主要用于 triage job；verify_and_merge 只是补充校验和合并
-            // 但也保留核心合并逻辑
-
             if (!avatarCheck.ok || (siteCheck && !siteCheck.ok)) {
               await createComment(MSG.LINK_UNREACHABLE)
               return
+            }
+
+            // 验证双向链接（friend PR 有 backlink 时）
+            if (primary.kind === 'friend' && isNonEmptyString(primary.data.backlink) && siteBase) {
+              const expected = siteBase.replace(/\/$/, '')
+              let backlinkUrl
+              try {
+                backlinkUrl = new URL(primary.data.backlink).toString()
+              } catch {
+                // ignore invalid backlink URL in verify phase
+                backlinkUrl = null
+              }
+              if (backlinkUrl) {
+                const fetched = await checkUrlReachability(backlinkUrl)
+                if (fetched.ok) {
+                  const html = fetched.body || ''
+                  const result = verifyBacklink(html, expected)
+                  if (result.found) {
+                    await setLabels({ addLabels: [LABEL_BIDIR_OK], removeLabels: [LABEL_BIDIR] })
+                  }
+                }
+              }
             }
 
             try {
