@@ -45,6 +45,7 @@ jobs:
         with:
           github-token: ${{ env.PAT }}
           script: |
+            process.env.GH_TOKEN = process.env.PAT
             const owner = context.repo.owner
             const repo = context.repo.repo
             const pull_number = context.payload.pull_request.number
@@ -717,6 +718,7 @@ jobs:
         with:
           github-token: ${{ env.PAT }}
           script: |
+            process.env.GH_TOKEN = process.env.PAT
             const owner = context.repo.owner
             const repo = context.repo.repo
             const pull_number = context.payload.issue.number
