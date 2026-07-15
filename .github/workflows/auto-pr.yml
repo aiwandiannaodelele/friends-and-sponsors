@@ -440,8 +440,7 @@ jobs:
                     }
 
                     if (isDelete) {
-      const { execSync: _em } = require('child_process')
-                _em(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
+                require('child_process').execSync(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
                   input: JSON.stringify({ merge_method: 'squash' }),
                   encoding: 'utf8',
                   timeout: 15000
@@ -560,8 +559,7 @@ jobs:
             // Auto merge if it is an edit (modified) and all checks pass
             if (relevant.length === 1 && relevant[0].status === 'modified' && allOk) {
                try {
-  const { execSync: _em } = require('child_process')
-                _em(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
+                require('child_process').execSync(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
                   input: JSON.stringify({ merge_method: 'squash' }),
                   encoding: 'utf8',
                   timeout: 15000
@@ -682,8 +680,7 @@ jobs:
                 await setLabels({ addLabels: [LABEL_BIDIR_OK], removeLabels: [LABEL_BIDIR] })
 
                 try {
-  const { execSync: _em } = require('child_process')
-                _em(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
+                require('child_process').execSync(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
                   input: JSON.stringify({ merge_method: 'squash' }),
                   encoding: 'utf8',
                   timeout: 15000
@@ -998,8 +995,7 @@ jobs:
                     }
 
                     if (isDelete) {
-      const { execSync: _em } = require('child_process')
-                _em(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
+                require('child_process').execSync(`gh api /repos/${owner}/${repo}/pulls/${pull_number}/merge --method PUT --input -`, {
                   input: JSON.stringify({ merge_method: 'squash' }),
                   encoding: 'utf8',
                   timeout: 15000
